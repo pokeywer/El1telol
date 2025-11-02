@@ -1,4 +1,4 @@
--- EL1TE'S DEVOURER - Neon Blue Animated Panel (Mobile Friendly)
+-- EL1TE'S DEVOURER - Neon Blue Animated Panel (Mobile Friendly, Nil-Safe)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -19,43 +19,67 @@ local function removeAllAccessoriesFromCharacter()
         end
     end
 end
-player.CharacterAdded:Connect(function() task.wait(0.2) removeAllAccessoriesFromCharacter() end)
-if player.Character then task.defer(removeAllAccessoriesFromCharacter) end
+
+player.CharacterAdded:Connect(function()
+    task.wait(0.2)
+    removeAllAccessoriesFromCharacter()
+end)
+
+if player.Character then
+    task.defer(removeAllAccessoriesFromCharacter)
+end
 
 -- Bat loop
 local Devour = {}
 Devour.running = false
 local TOOL_NAME = "Bat"
+
 local function equipBat()
-    local char, bp = player.Character, player:FindFirstChild("Backpack")
+    local char = player.Character
+    local bp = player:FindFirstChild("Backpack")
     if char and bp then
         local tool = bp:FindFirstChild(TOOL_NAME)
-        if tool then tool.Parent = char return true end
+        if tool then
+            tool.Parent = char
+            return true
+        end
     end
+    return false
 end
+
 local function unequipBat()
-    local char, bp = player.Character, player:FindFirstChild("Backpack")
+    local char = player.Character
+    local bp = player:FindFirstChild("Backpack")
     if char and bp then
         local tool = char:FindFirstChild(TOOL_NAME)
-        if tool then tool.Parent = bp return true end
+        if tool then
+            tool.Parent = bp
+            return true
+        end
     end
+    return false
 end
+
 function Devour:Start()
     if self.running then return end
     self.running = true
     task.spawn(function()
+        -- Wait until Backpack & Tool exist
+        repeat task.wait() until player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild(TOOL_NAME)
         while self.running do
-            equipBat()
+            pcall(equipBat)
             task.wait(0.041)
-            unequipBat()
+            pcall(unequipBat)
             task.wait(0.041)
         end
     end)
 end
+
 function Devour:Stop()
     self.running = false
-    unequipBat()
+    pcall(unequipBat)
 end
+
 player.CharacterAdded:Connect(function() Devour:Stop() end)
 
 -- Remove old GUI
@@ -145,9 +169,12 @@ local function update()
         circle.ImageColor3 = Color3.fromRGB(0,150,255)
     end
 end
+
 btn.MouseButton1Click:Connect(function()
     state = not state
-    if state then Devour:Start() else Devour:Stop() end
+    pcall(function()
+        if state then Devour:Start() else Devour:Stop() end
+    end)
     update()
 end)
 update()
