@@ -1,0 +1,166 @@
+local Players=game:GetService("Players")
+local ReplicatedStorage=game:GetService("ReplicatedStorage")
+local RunService=game:GetService("RunService")
+local UserInputService=game:GetService("UserInputService")
+local HttpService=game:GetService("HttpService")
+
+local LocalPlayer=Players.LocalPlayer
+local Remote=ReplicatedStorage.Packages.Net["RE/LaserGun_Fire"]
+local Settings=require(ReplicatedStorage.Shared.LaserGunsShared).Settings
+
+Settings.Radius.Value=256
+Settings.MaxBounces.Value=9999
+Settings.MaxAge.Value=1e6
+Settings.StunDuration.Value=60
+Settings.ImpulseForce.Value=1e6
+Settings.Cooldown.Value=0
+
+local LaggerEnabled=false
+local LastEquipped=false
+
+local ScreenGui=Instance.new("ScreenGui")
+ScreenGui.Name="El1teLaserLaggerUI"
+ScreenGui.Parent=LocalPlayer:WaitForChild("PlayerGui")
+
+local Frame=Instance.new("Frame")
+Frame.Size=UDim2.new(0,220,0,90)
+Frame.Position=UDim2.new(0,50,0,50)
+Frame.BackgroundColor3=Color3.fromRGB(0,0,0)
+Frame.BackgroundTransparency=0.2
+Frame.Active=true
+Frame.Parent=ScreenGui
+
+local Gradient=Instance.new("UIGradient")
+Gradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(100,180,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(50,120,255))})
+Gradient.Rotation=45
+Gradient.Parent=Frame
+
+local Corner=Instance.new("UICorner")
+Corner.CornerRadius=UDim.new(0,14)
+Corner.Parent=Frame
+
+local Title=Instance.new("TextLabel")
+Title.Size=UDim2.new(1,-20,0,25)
+Title.Position=UDim2.new(0,10,0,5)
+Title.Text="El1te LaserLagger"
+Title.TextColor3=Color3.fromRGB(255,255,255)
+Title.Font=Enum.Font.FredokaOne
+Title.TextScaled=true
+Title.TextWrapped=true
+Title.BackgroundTransparency=1
+Title.Parent=Frame
+
+spawn(function()
+	local hue=0
+	while true do
+		hue=(hue+0.01)%1
+		Title.TextColor3=Color3.fromHSV(hue,0.7,1)
+		task.wait(0.05)
+	end
+end)
+
+local Button=Instance.new("TextButton")
+Button.Size=UDim2.new(1,-20,0,40)
+Button.Position=UDim2.new(0,10,0,45)
+Button.Text="Lagger: OFF"
+Button.TextColor3=Color3.fromRGB(255,255,255)
+Button.Font=Enum.Font.FredokaOne
+Button.TextSize=20
+Button.BackgroundColor3=Color3.fromRGB(80,150,255)
+Button.AutoButtonColor=false
+Button.Parent=Frame
+
+local ButtonCorner=Instance.new("UICorner")
+ButtonCorner.CornerRadius=UDim.new(0,10)
+ButtonCorner.Parent=Button
+
+local ButtonGradient=Instance.new("UIGradient")
+ButtonGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(120,200,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(50,130,255))})
+ButtonGradient.Rotation=90
+ButtonGradient.Parent=Button
+
+local Supp=false
+Button.MouseButton1Click:Connect(function()
+	if Supp then Supp=false return end
+	LaggerEnabled=not LaggerEnabled
+	Button.Text=LaggerEnabled and "Lagger: ON" or "Lagger: OFF"
+	if LaggerEnabled then
+		ButtonGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(60,180,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(120,220,255))})
+	else
+		ButtonGradient.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(120,200,255)),ColorSequenceKeypoint.new(1,Color3.fromRGB(50,130,255))})
+	end
+end)
+
+local Dragging=false
+local DragInput,DragStart,StartPos
+local DragThreshold=6
+
+local function Update(input)
+	local delta=input.Position-DragStart
+	Frame.Position=UDim2.new(StartPos.X.Scale,StartPos.X.Offset+delta.X,StartPos.Y.Scale,StartPos.Y.Offset+delta.Y)
+end
+
+local function Attach(handle)
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+			Dragging=true
+			DragStart=input.Position
+			StartPos=Frame.Position
+			DragInput=nil
+			input.Changed:Connect(function()
+				if input.UserInputState==Enum.UserInputState.End then Dragging=false end
+			end)
+		end
+	end)
+	handle.InputChanged:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then
+			DragInput=input
+		end
+	end)
+end
+
+Attach(Frame)
+Attach(Button)
+
+UserInputService.InputChanged:Connect(function(input)
+	if Dragging and input==DragInput then
+		if (input.Position-DragStart).Magnitude>DragThreshold then Supp=true end
+		Update(input)
+	end
+end)
+
+local function GetNearest()
+	local nearest
+	local shortest=math.huge
+	local localChar=LocalPlayer.Character
+	if not localChar or not localChar.PrimaryPart then return nil end
+	local pos=localChar.PrimaryPart.Position
+	for _,p in pairs(Players:GetPlayers()) do
+		local char=p.Character
+		if p~=LocalPlayer and char and char.PrimaryPart then
+			local dist=(pos-char.PrimaryPart.Position).Magnitude
+			if dist<shortest then
+				shortest=dist
+				nearest=p
+			end
+		end
+	end
+	return nearest
+end
+
+RunService.RenderStepped:Connect(function()
+	local char=LocalPlayer.Character
+	if not char then return end
+	local tool=char:FindFirstChildOfClass("Tool")
+	local equipped=tool and tool.Name=="Laser Gun"
+	if equipped~=LastEquipped then LastEquipped=equipped end
+	if not (LaggerEnabled and equipped) then return end
+	local target=GetNearest()
+	if not target then return end
+	local targetChar=target.Character
+	if not (targetChar and targetChar.PrimaryPart and char.PrimaryPart) then return end
+	local pos1,pos2=char.PrimaryPart.Position,targetChar.PrimaryPart.Position
+	local dir=(pos2-pos1).Unit
+	local id=HttpService:GenerateGUID(false):lower():gsub("%-","")
+	Remote:FireServer(id,pos1,dir,workspace:GetServerTimeNow())
+end)
